@@ -48,51 +48,69 @@ if (!deviceId && !checkOnly) {
 async function run() {
   try {
     const jar = new CookieJar();
-    console.log("Requesting Xiaomi login challenge...");
-    const challengeResponse = await request(
-      `${SERVICE_URL}?sid=${SERVICE_SID}&_json=true&checkSafeAddress=true`,
-      { headers: jar.headers() },
-    );
-    jar.addFromHeaders(challengeResponse.headers);
-    const challenge = parseMiJson(await challengeResponse.text());
-    const sign = required(challenge?._sign, "Xiaomi login _sign");
-
-    console.log("Submitting credentials to Xiaomi...");
-    const loginBody = new URLSearchParams({
-      _json: "true",
-      sid: SERVICE_SID,
-      serviceParam: '{"checkSafePhone":false}',
-      user: username,
-        hash: md5Upper(password),
-      _sign: sign,
-      callback: "https://unlock.update.miui.com/sts",
-    });
-    const loginResponse = await request(LOGIN_URL, {
-      method: "POST",
-      headers: {
-        ...jar.headers(),
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: loginBody,
-    });
-    jar.addFromHeaders(loginResponse.headers);
-    const login = parseMiJson(await loginResponse.text());
-    if (Number(login?.code) !== 0) {
-      const captcha = login?.captchaUrl
-        ? " CAPTCHA/browser verification required."
-        : "";
-      fail(
-        `Xiaomi login was not accepted (code ${login?.code ?? "unknown"}).${
-          login?.desc || login?.description || captcha
-            ? ` ${login?.desc || login?.description || captcha}`
-            : ""
-        }`,
+    let login;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      console.log("Requesting Xiaomi login challenge...");
+      const challengeResponse = await request(
+        `${SERVICE_URL}?sid=${SERVICE_SID}&_json=true&checkSafeAddress=true`,
+        { headers: jar.headers() },
       );
+      jar.addFromHeaders(challengeResponse.headers);
+      const challenge = parseMiJson(await challengeResponse.text());
+      const sign = required(challenge?._sign, "Xiaomi login _sign");
+
+      console.log("Submitting credentials to Xiaomi...");
+      const loginBody = new URLSearchParams({
+        _json: "true",
+        sid: challenge?.sid || SERVICE_SID,
+        qs: challenge?.qs || "",
+        serviceParam:
+          challenge?.serviceParam || '{"checkSafePhone":false}',
+        user: username,
+        hash: md5Upper(password),
+        _sign: sign,
+        callback:
+          challenge?.callback || "https://unlock.update.miui.com/sts",
+      });
+      const loginResponse = await request(LOGIN_URL, {
+        method: "POST",
+        headers: {
+          ...jar.headers(),
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: loginBody,
+      });
+      jar.addFromHeaders(loginResponse.headers);
+      login = parseMiJson(await loginResponse.text());
+      if (Number(login?.code) !== 0) {
+        const captcha = login?.captchaUrl
+          ? " CAPTCHA/browser verification required."
+          : "";
+        fail(
+          `Xiaomi login was not accepted (code ${login?.code ?? "unknown"}).${
+            login?.desc || login?.description || captcha
+              ? ` ${login?.desc || login?.description || captcha}`
+              : ""
+          }`,
+        );
+      }
+      if (!login?.notificationUrl) break;
+      if (!process.stdin.isTTY) {
+        fail(
+          "Xiaomi requires account verification. Re-run this command in an interactive terminal and open the printed notification URL.",
+        );
+      }
+      console.log(
+        "\nXiaomi accepted the credentials but requires official verification.",
+      );
+      console.log(
+        "Open this temporary URL in your normal Xiaomi browser, complete verification, then return here:",
+      );
+      console.log(login.notificationUrl);
+      await waitForEnter();
     }
     if (login?.notificationUrl) {
-      fail(
-        "Xiaomi accepted the credentials but requires account verification before issuing passToken. Complete the official verification in the Xiaomi browser flow, then retry.",
-      );
+      fail("Xiaomi still requires account verification after the retries.");
     }
 
     const userId = required(login.userId, "Xiaomi userId");
@@ -260,6 +278,14 @@ function extractCookie(text, name) {
 
 function md5Upper(value) {
   return createHash("md5").update(String(value)).digest("hex").toUpperCase();
+}
+
+async function waitForEnter() {
+  process.stdout.write("Press Enter after verification: ");
+  await new Promise((resolve) => {
+    process.stdin.resume();
+    process.stdin.once("data", resolve);
+  });
 }
 
 function required(value, label) {

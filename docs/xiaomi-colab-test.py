@@ -124,7 +124,7 @@ def post_worker(worker_url, path, payload, worker_token=""):
     return response, body
 
 
-def login_to_xiaomi(username, password):
+def login_to_xiaomi(username, password, verification_attempts=2):
     """Return only the non-password login fields needed by /api/session."""
     browser = requests.Session()
     headers = {
@@ -132,81 +132,94 @@ def login_to_xiaomi(username, password):
         "Accept": "application/json,text/plain,*/*",
     }
 
-    challenge_url = (
-        f"{ACCOUNT_SERVICE_URL}?sid={SERVICE_SID}"
-        "&_json=true&checkSafeAddress=true"
-    )
-    challenge_response = browser.get(
-        challenge_url, headers=headers, timeout=TIMEOUT_SECONDS
-    )
-    challenge = parse_mi_json(challenge_response.text)
-    sign = challenge.get("_sign")
-    if not sign:
-        raise RuntimeError(
-            "Xiaomi did not return a login challenge. Browser verification may be required."
+    for attempt in range(verification_attempts + 1):
+        challenge_url = (
+            f"{ACCOUNT_SERVICE_URL}?sid={SERVICE_SID}"
+            "&_json=true&checkSafeAddress=true"
         )
-    challenge_qs = challenge.get("qs", "")
-    challenge_callback = challenge.get(
-        "callback", "https://unlock.update.miui.com/sts"
-    )
-    challenge_service_param = challenge.get(
-        "serviceParam", '{"checkSafePhone":false}'
-    )
-
-    login_body = {
-        "_json": "true",
-        "sid": challenge.get("sid") or SERVICE_SID,
-        "qs": challenge_qs,
-        "serviceParam": challenge_service_param,
-        "user": username,
-        "hash": md5_upper(password),
-        "_sign": sign,
-        "callback": challenge_callback,
-    }
-    login_response = browser.post(
-        ACCOUNT_LOGIN_URL,
-        data=login_body,
-        headers={**headers, "Content-Type": "application/x-www-form-urlencoded"},
-        timeout=TIMEOUT_SECONDS,
-    )
-    login = parse_mi_json(login_response.text)
-    try:
-        login_code = int(login.get("code", -1))
-    except (TypeError, ValueError):
-        login_code = -1
-    if login_code != 0:
-        code = login.get("code", "unknown")
-        hint = safe_message(login)
-        diagnosis = login_failure_hint(login_code, login, challenge)
-        diagnostics = (
-            f"captcha={bool(login.get('captchaUrl'))}, "
-            f"passToken={bool(login.get('passToken'))}, "
-            f"ssecurity={bool(login.get('ssecurity'))}, "
-            f"callback={bool(login.get('location'))}"
+        challenge_response = browser.get(
+            challenge_url, headers=headers, timeout=TIMEOUT_SECONDS
         )
-        raise RuntimeError(
-            f"Xiaomi login rejected (code {code}). {hint} "
-            f"{diagnosis} [{diagnostics}]".strip()
+        challenge = parse_mi_json(challenge_response.text)
+        sign = challenge.get("_sign")
+        if not sign:
+            raise RuntimeError(
+                "Xiaomi did not return a login challenge. Browser verification may be required."
+            )
+        challenge_qs = challenge.get("qs", "")
+        challenge_callback = challenge.get(
+            "callback", "https://unlock.update.miui.com/sts"
         )
-    if login.get("notificationUrl"):
-        raise RuntimeError(
-            "Xiaomi accepted the credentials but requires account verification "
-            "before issuing passToken. Complete the official verification in "
-            "the Xiaomi browser flow, then retry."
+        challenge_service_param = challenge.get(
+            "serviceParam", '{"checkSafePhone":false}'
         )
 
-    required = ("userId", "passToken")
-    missing = [key for key in required if not login.get(key)]
-    if missing:
-        raise RuntimeError(f"Xiaomi login response is missing: {', '.join(missing)}.")
+        login_body = {
+            "_json": "true",
+            "sid": challenge.get("sid") or SERVICE_SID,
+            "qs": challenge_qs,
+            "serviceParam": challenge_service_param,
+            "user": username,
+            "hash": md5_upper(password),
+            "_sign": sign,
+            "callback": challenge_callback,
+        }
+        login_response = browser.post(
+            ACCOUNT_LOGIN_URL,
+            data=login_body,
+            headers={**headers, "Content-Type": "application/x-www-form-urlencoded"},
+            timeout=TIMEOUT_SECONDS,
+        )
+        login = parse_mi_json(login_response.text)
+        try:
+            login_code = int(login.get("code", -1))
+        except (TypeError, ValueError):
+            login_code = -1
+        if login_code != 0:
+            code = login.get("code", "unknown")
+            hint = safe_message(login)
+            diagnosis = login_failure_hint(login_code, login, challenge)
+            diagnostics = (
+                f"captcha={bool(login.get('captchaUrl'))}, "
+                f"passToken={bool(login.get('passToken'))}, "
+                f"ssecurity={bool(login.get('ssecurity'))}, "
+                f"callback={bool(login.get('location'))}"
+            )
+            raise RuntimeError(
+                f"Xiaomi login rejected (code {code}). {hint} "
+                f"{diagnosis} [{diagnostics}]".strip()
+            )
+        if login.get("notificationUrl"):
+            if attempt >= verification_attempts:
+                raise RuntimeError(
+                    "Xiaomi still requires account verification after the allowed retries."
+                )
+            print("\nXiaomi accepted the credentials but requires official verification.")
+            print("Open this URL in your normal Xiaomi browser, complete the verification,")
+            print("then return here. Do not share this URL; it is temporary and sensitive:")
+            print(login["notificationUrl"])
+            input(
+                "\nAfter the Xiaomi page says verification is complete, "
+                "press Enter to retry login..."
+            )
+            continue
 
-    # Keep ssecurity/location in memory only as diagnostic presence checks.
-    return {
-        "userId": str(login["userId"]),
-        "passToken": str(login["passToken"]),
-        "has_ssecurity": bool(login.get("ssecurity")),
-        "has_callback": bool(login.get("location")),
-    }
+        required = ("userId", "passToken")
+        missing = [key for key in required if not login.get(key)]
+        if missing:
+            raise RuntimeError(
+                f"Xiaomi login response is missing: {', '.join(missing)}."
+            )
+
+        # Keep ssecurity/location in memory only as diagnostic presence checks.
+        return {
+            "userId": str(login["userId"]),
+            "passToken": str(login["passToken"]),
+            "has_ssecurity": bool(login.get("ssecurity")),
+            "has_callback": bool(login.get("location")),
+        }
+
+    raise RuntimeError("Xiaomi verification flow did not complete.")
 
 
 def print_userinfo(result):
