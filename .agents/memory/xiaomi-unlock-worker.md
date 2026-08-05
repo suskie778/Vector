@@ -36,3 +36,15 @@ not an additional Xiaomi failure.
 
 **How to apply:** Replace the old Colab cell with the current test file before
 rerunning; interpret the first Xiaomi code, not the secondary IPython traceback.
+
+The account login endpoint currently expects an uppercase MD5 password hash;
+after that succeeds, Xiaomi may return `notificationUrl` instead of tokens,
+meaning credentials are valid but account verification must be completed.
+
+**Why:** Testing the real configured account showed the failure moved from
+`70016` to a successful login response with verification required after the
+hash was corrected.
+
+**How to apply:** Keep MD5-uppercase for this login endpoint and handle
+`notificationUrl` as an official browser-verification state; do not treat it
+as a missing-token parsing bug or bypass it.

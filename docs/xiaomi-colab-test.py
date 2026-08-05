@@ -69,8 +69,8 @@ def login_failure_hint(code, login, challenge):
     return "Xiaomi رفض الطلب؛ استخدم رسالة Xiaomi الظاهرة للتحقق من السبب."
 
 
-def sha1_upper(value):
-    return hashlib.sha1(value.encode("utf-8")).hexdigest().upper()
+def md5_upper(value):
+    return hashlib.md5(value.encode("utf-8")).hexdigest().upper()
 
 
 def redact(value):
@@ -159,7 +159,7 @@ def login_to_xiaomi(username, password):
         "qs": challenge_qs,
         "serviceParam": challenge_service_param,
         "user": username,
-        "hash": sha1_upper(password),
+        "hash": md5_upper(password),
         "_sign": sign,
         "callback": challenge_callback,
     }
@@ -187,6 +187,12 @@ def login_to_xiaomi(username, password):
         raise RuntimeError(
             f"Xiaomi login rejected (code {code}). {hint} "
             f"{diagnosis} [{diagnostics}]".strip()
+        )
+    if login.get("notificationUrl"):
+        raise RuntimeError(
+            "Xiaomi accepted the credentials but requires account verification "
+            "before issuing passToken. Complete the official verification in "
+            "the Xiaomi browser flow, then retry."
         )
 
     required = ("userId", "passToken")

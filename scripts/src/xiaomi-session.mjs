@@ -63,7 +63,7 @@ async function run() {
       sid: SERVICE_SID,
       serviceParam: '{"checkSafePhone":false}',
       user: username,
-      hash: sha1Upper(password),
+        hash: md5Upper(password),
       _sign: sign,
       callback: "https://unlock.update.miui.com/sts",
     });
@@ -87,6 +87,11 @@ async function run() {
             ? ` ${login?.desc || login?.description || captcha}`
             : ""
         }`,
+      );
+    }
+    if (login?.notificationUrl) {
+      fail(
+        "Xiaomi accepted the credentials but requires account verification before issuing passToken. Complete the official verification in the Xiaomi browser flow, then retry.",
       );
     }
 
@@ -253,8 +258,8 @@ function extractCookie(text, name) {
   return match ? decodeURIComponent(match[1]) : "";
 }
 
-function sha1Upper(value) {
-  return createHash("sha1").update(String(value)).digest("hex").toUpperCase();
+function md5Upper(value) {
+  return createHash("md5").update(String(value)).digest("hex").toUpperCase();
 }
 
 function required(value, label) {
