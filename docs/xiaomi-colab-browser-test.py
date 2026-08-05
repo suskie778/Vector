@@ -56,13 +56,19 @@ def redact(value):
 
 
 def start_browser_stack():
-    required = ("Xvfb", "x11vnc", "websockify")
+    required = ("Xvfb", "x11vnc")
     missing = [name for name in required if not shutil_which(name)]
     if missing:
         raise RuntimeError(
             "Missing browser tools: "
             + ", ".join(missing)
             + ". Run the installation cell from the accompanying guide first."
+        )
+    websockify_command = find_websockify_command()
+    if not websockify_command:
+        raise RuntimeError(
+            "Missing websockify. Run the installation cell from the accompanying "
+            "guide first, including: pip install -q websockify."
         )
 
     display = ":99"
@@ -93,7 +99,7 @@ def start_browser_stack():
         novnc_root = "/usr/share/novnc/utils"
     subprocess.Popen(
         [
-            "websockify",
+            *websockify_command,
             "--web",
             novnc_root,
             "6080",
@@ -121,6 +127,18 @@ def shutil_which(name):
         check=False,
     )
     return result.stdout.strip() or None
+
+
+def find_websockify_command():
+    executable = shutil_which("websockify")
+    if executable:
+        return [executable]
+    probe = subprocess.run(
+        [sys.executable, "-c", "import websockify"],
+        capture_output=True,
+        check=False,
+    )
+    return [sys.executable, "-m", "websockify"] if probe.returncode == 0 else None
 
 
 def create_driver(display):

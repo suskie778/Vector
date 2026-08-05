@@ -13,9 +13,20 @@
 
 ```python
 !apt-get -qq update
-!apt-get -qq install -y chromium chromium-driver xvfb x11vnc novnc websockify
-!pip -q install selenium requests
+!apt-get -qq install -y chromium chromium-driver xvfb x11vnc novnc
+!pip -q install selenium requests websockify
 ```
+
+بعد التثبيت، تأكد أن الأدوات موجودة:
+
+```python
+!command -v Xvfb
+!command -v x11vnc
+!command -v websockify || python -c "import websockify; print('websockify module: OK')"
+```
+
+إذا كانت خلية التشغيل القديمة تعمل في نفس الجلسة، أعد تشغيل خلية التثبيت ثم
+أعد تشغيل خلية السكربت. لا تحتاج إلى إعادة إدخال كلمة المرور في أي خلية أخرى.
 
 ## خلية التشغيل
 
