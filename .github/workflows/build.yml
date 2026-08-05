@@ -31,6 +31,23 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
 
+      # LSPlant uses C++20 modules. Android SDK's bundled Ninja 1.10.2 cannot
+      # configure those targets, so use a current Ninja before Gradle starts.
+      - name: Set up Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v6
+        with:
+          version: 1.13.2
+
+      # Do not let CMake select the Android SDK copy of Ninja 1.10.2.
+      - name: Remove Android SDK CMake
+        shell: bash
+        run: rm -rf "$ANDROID_HOME/cmake"
+
+      - name: Verify native build tools
+        run: |
+          cmake --version
+          ninja --version
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
