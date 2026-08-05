@@ -62,7 +62,8 @@ def start_browser_stack():
         raise RuntimeError(
             "Missing browser tools: "
             + ", ".join(missing)
-            + ". Run the installation cell from the accompanying guide first."
+            + ". In Colab run: !apt-get update -qq && "
+            + "!apt-get install -y -qq x11vnc, then rerun this cell."
         )
     websockify_command = find_websockify_command()
     if not websockify_command:

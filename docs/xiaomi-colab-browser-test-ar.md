@@ -13,8 +13,30 @@
 
 ```python
 !apt-get -qq update
-!apt-get -qq install -y chromium chromium-driver xvfb x11vnc novnc
+!apt-get -qq install -y chromium chromium-driver xvfb novnc
 !pip -q install selenium requests websockify
+```
+
+إذا ظهر أن `Xvfb` و`websockify` موجودان لكن `x11vnc` مفقود، شغّل خلية
+الإصلاح التالية بشكل منفصل:
+
+```python
+!apt-get update -qq
+!apt-get install -y -qq x11vnc
+!command -v x11vnc
+```
+
+يجب أن تطبع الخلية مساراً مثل:
+
+```text
+/usr/bin/x11vnc
+```
+
+إذا فشل تثبيت `x11vnc`، اعرض رسالة الخطأ بإزالة `-qq`:
+
+```python
+!apt-get update
+!apt-get install -y x11vnc
 ```
 
 بعد التثبيت، تأكد أن الأدوات موجودة:
