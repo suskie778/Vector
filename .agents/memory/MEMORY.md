@@ -1,1 +1,2 @@
 - [Xiaomi unlock worker](xiaomi-unlock-worker.md) — keep official session, device, waiting-period, and fastboot checks intact while optimizing crypto and network overhead.
+- [Vector Android 17 diagnosis](vector-android17.md) — distinguish Zygisk/injection failures from module scope or API compatibility issues after Pixel OTA updates.
