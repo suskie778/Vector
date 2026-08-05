@@ -1,0 +1,1 @@
+- [GitHub push target](github-push-target.md) — verify the authenticated owner and repository URL before any force push.
