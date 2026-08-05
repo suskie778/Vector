@@ -25,3 +25,14 @@ mistaking a successful login test for a complete phone-unlock test.
 **How to apply:** Use the Colab smoke test through `/api/session` and
 `/api/userinfo`; use `Fastboot.mjs` on the machine that physically has the
 phone connected.
+
+Xiaomi's account challenge can return dynamic `qs` and `serviceParam` values;
+login clients must carry those challenge fields into `serviceLoginAuth2`.
+Colab's `SystemExit`/IPython traceback after a rejected login is display noise,
+not an additional Xiaomi failure.
+
+**Why:** A stale Colab cell and fixed challenge fields can obscure the actual
+`70016` login result and lead to incorrect debugging.
+
+**How to apply:** Replace the old Colab cell with the current test file before
+rerunning; interpret the first Xiaomi code, not the secondary IPython traceback.

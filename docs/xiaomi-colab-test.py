@@ -56,6 +56,19 @@ def safe_message(value):
     )
 
 
+def login_failure_hint(code, login, challenge):
+    """Explain a login rejection without exposing Xiaomi's raw response."""
+    if login.get("captchaUrl") or challenge.get("captchaUrl"):
+        return "Xiaomi طلب CAPTCHA أو تحققاً من المتصفح الرسمي."
+    if code in {70016, 70002, 70003}:
+        return (
+            "Xiaomi رفض بيانات تسجيل الدخول أو جلسة الطلب. "
+            "تحقق أولاً من تسجيل الدخول عبر account.xiaomi.com؛ "
+            "إذا نجح المتصفح وفشل Colab فالحساب يتطلب تدفق المتصفح الرسمي."
+        )
+    return "Xiaomi رفض الطلب؛ استخدم رسالة Xiaomi الظاهرة للتحقق من السبب."
+
+
 def sha1_upper(value):
     return hashlib.sha1(value.encode("utf-8")).hexdigest().upper()
 
@@ -132,15 +145,23 @@ def login_to_xiaomi(username, password):
         raise RuntimeError(
             "Xiaomi did not return a login challenge. Browser verification may be required."
         )
+    challenge_qs = challenge.get("qs", "")
+    challenge_callback = challenge.get(
+        "callback", "https://unlock.update.miui.com/sts"
+    )
+    challenge_service_param = challenge.get(
+        "serviceParam", '{"checkSafePhone":false}'
+    )
 
     login_body = {
         "_json": "true",
-        "sid": SERVICE_SID,
-        "serviceParam": '{"checkSafePhone":false}',
+        "sid": challenge.get("sid") or SERVICE_SID,
+        "qs": challenge_qs,
+        "serviceParam": challenge_service_param,
         "user": username,
         "hash": sha1_upper(password),
         "_sign": sign,
-        "callback": "https://unlock.update.miui.com/sts",
+        "callback": challenge_callback,
     }
     login_response = browser.post(
         ACCOUNT_LOGIN_URL,
@@ -149,12 +170,24 @@ def login_to_xiaomi(username, password):
         timeout=TIMEOUT_SECONDS,
     )
     login = parse_mi_json(login_response.text)
-    if int(login.get("code", -1)) != 0:
+    try:
+        login_code = int(login.get("code", -1))
+    except (TypeError, ValueError):
+        login_code = -1
+    if login_code != 0:
         code = login.get("code", "unknown")
         hint = safe_message(login)
-        if login.get("captchaUrl"):
-            hint = f"{hint} CAPTCHA/browser verification required.".strip()
-        raise RuntimeError(f"Xiaomi login rejected (code {code}). {hint}".strip())
+        diagnosis = login_failure_hint(login_code, login, challenge)
+        diagnostics = (
+            f"captcha={bool(login.get('captchaUrl'))}, "
+            f"passToken={bool(login.get('passToken'))}, "
+            f"ssecurity={bool(login.get('ssecurity'))}, "
+            f"callback={bool(login.get('location'))}"
+        )
+        raise RuntimeError(
+            f"Xiaomi login rejected (code {code}). {hint} "
+            f"{diagnosis} [{diagnostics}]".strip()
+        )
 
     required = ("userId", "passToken")
     missing = [key for key in required if not login.get(key)]
@@ -280,10 +313,15 @@ def main():
         print(json.dumps(redact(unlock_result), ensure_ascii=False, indent=2))
 
 
-try:
-    main()
-except KeyboardInterrupt:
-    print("\nCancelled.")
-except (requests.RequestException, RuntimeError) as error:
-    print(f"\n[ERROR] {error}", file=sys.stderr)
-    sys.exit(1)
+def run_colab():
+    """Run without sys.exit so Colab does not generate a secondary traceback."""
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nCancelled.")
+    except (requests.RequestException, RuntimeError) as error:
+        print(f"\n[ERROR] {error}", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    run_colab()
