@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "hello": "tsx ./src/hello.ts",
+    "check:unlock-worker": "node --check ./src/unlock-mi-easier.optimized.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

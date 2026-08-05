@@ -1,0 +1,1 @@
+- [Xiaomi unlock worker](xiaomi-unlock-worker.md) — keep official session, device, waiting-period, and fastboot checks intact while optimizing crypto and network overhead.
