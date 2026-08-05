@@ -1,0 +1,79 @@
+name: Build Vector Test2
+
+on:
+  push:
+    branches: ["Test2"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      HAS_PERSISTENT_SIGNING_KEY: ${{ secrets.VECTOR_KEYSTORE_BASE64 != '' }}
+    steps:
+      - name: Check out source and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Create CI signing key
+        if: env.HAS_PERSISTENT_SIGNING_KEY != 'true'
+        run: |
+          keytool -genkeypair -v \
+            -keystore "$RUNNER_TEMP/vector-ci.jks" \
+            -storetype JKS \
+            -storepass vector-ci-store \
+            -keypass vector-ci-key \
+            -alias vector-ci \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Vector CI, OU=Build, O=Vector, L=CI, ST=CI, C=US"
+
+      - name: Restore persistent signing key
+        if: env.HAS_PERSISTENT_SIGNING_KEY == 'true'
+        env:
+          VECTOR_KEYSTORE_BASE64: ${{ secrets.VECTOR_KEYSTORE_BASE64 }}
+        run: |
+          printf '%s' "$VECTOR_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/vector-ci.jks"
+
+      - name: Build signed release module
+        env:
+          ANDROID_STORE_FILE: ${{ runner.temp }}/vector-ci.jks
+          ANDROID_STORE_PASSWORD: ${{ secrets.VECTOR_KEYSTORE_PASSWORD || 'vector-ci-store' }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.VECTOR_KEY_PASSWORD || 'vector-ci-key' }}
+          ANDROID_KEY_ALIAS: ${{ secrets.VECTOR_KEY_ALIAS || 'vector-ci' }}
+          VECTOR_BUILD_REPOSITORY: ${{ github.repository }}
+          VECTOR_BUILD_COMMIT: ${{ github.sha }}
+        run: |
+          printf '%s\n' \
+            "androidStoreFile=$ANDROID_STORE_FILE" \
+            "androidStorePassword=$ANDROID_STORE_PASSWORD" \
+            "androidKeyPassword=$ANDROID_KEY_PASSWORD" \
+            "androidKeyAlias=$ANDROID_KEY_ALIAS" >> gradle.properties
+          ./gradlew zipAll --no-daemon --stacktrace
+
+      - name: Upload Vector module
+        uses: actions/upload-artifact@v4
+        with:
+          name: vector-release
+          path: zygisk/build/**/*.zip
+          if-no-files-found: error
