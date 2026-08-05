@@ -37,6 +37,16 @@ not an additional Xiaomi failure.
 **How to apply:** Replace the old Colab cell with the current test file before
 rerunning; interpret the first Xiaomi code, not the secondary IPython traceback.
 
+When Xiaomi returns `notificationUrl`, verification must happen in the same
+browser session whose cookies will be used for the retry; opening it in a
+separate local browser does not update Colab's HTTP session.
+
+**Why:** Xiaomi's verification page is a JavaScript app and binds completion
+to the account/browser session, so a separate browser produces a new URL again.
+
+**How to apply:** Use the in-Colab Chromium/VNC test for this state, then retry
+the official login from that same Colab runtime.
+
 The account login endpoint currently expects an uppercase MD5 password hash;
 after that succeeds, Xiaomi may return `notificationUrl` instead of tokens,
 meaning credentials are valid but account verification must be completed.

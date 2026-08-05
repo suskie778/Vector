@@ -16,9 +16,11 @@ CAPTCHA, account linking, or waiting periods.
 
 import getpass
 import hashlib
+import html
 import json
 import re
 import sys
+import time
 from pathlib import Path
 
 import requests
@@ -194,14 +196,21 @@ def login_to_xiaomi(username, password, verification_attempts=2):
                 raise RuntimeError(
                     "Xiaomi still requires account verification after the allowed retries."
                 )
-            print("\nXiaomi accepted the credentials but requires official verification.")
-            print("Open this URL in your normal Xiaomi browser, complete the verification,")
-            print("then return here. Do not share this URL; it is temporary and sensitive:")
-            print(login["notificationUrl"])
-            input(
-                "\nAfter the Xiaomi page says verification is complete, "
-                "press Enter to retry login..."
+            verification_url = str(login["notificationUrl"])
+            print(
+                "\nXiaomi accepted the credentials but requires official verification."
             )
+            print(
+                "Complete every step until Xiaomi shows a success/finished message. "
+                "Opening the page alone is not enough."
+            )
+            print("The URL is temporary and sensitive; do not copy or share it.")
+            open_colab_verification(verification_url)
+            input(
+                "\nAfter the Xiaomi page explicitly says verification is complete, "
+                "close that tab and press Enter to retry login..."
+            )
+            time.sleep(2)
             continue
 
         required = ("userId", "passToken")
@@ -220,6 +229,27 @@ def login_to_xiaomi(username, password, verification_attempts=2):
         }
 
     raise RuntimeError("Xiaomi verification flow did not complete.")
+
+
+def open_colab_verification(url):
+    """Open Xiaomi's official verification page in the user's Colab browser."""
+    try:
+        from IPython.display import HTML, Javascript, display
+
+        safe_url = html.escape(url, quote=True)
+        display(
+            HTML(
+                '<p><a href="'
+                f"{safe_url}"
+                '" target="_blank" rel="noreferrer">'
+                "Open Xiaomi verification in a new browser tab</a></p>"
+            )
+        )
+        display(Javascript(f"window.open({json.dumps(url)}, '_blank');"))
+        print("A browser tab was opened. If it was blocked, click the link above.")
+    except Exception:
+        print("Open this URL manually in the same browser where Xiaomi is signed in:")
+        print(url)
 
 
 def print_userinfo(result):
