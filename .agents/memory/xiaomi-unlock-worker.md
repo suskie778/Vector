@@ -48,3 +48,13 @@ hash was corrected.
 **How to apply:** Keep MD5-uppercase for this login endpoint and handle
 `notificationUrl` as an official browser-verification state; do not treat it
 as a missing-token parsing bug or bypass it.
+
+The repository's `Htmlendpointscanner.md` only crawls public HTML/JS for URL
+strings and possible leaked secrets, while `completer.md` only classifies its
+JSON report. Neither performs Xiaomi authentication or creates a valid session.
+
+**Why:** Reviewing both files showed no browser automation, cookie handling, or
+passToken/serviceToken exchange.
+
+**How to apply:** Use them only for public endpoint inventory; never treat
+their `found_secrets` output as a way to obtain or bypass Xiaomi session tokens.
