@@ -11,31 +11,28 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
       HAS_PERSISTENT_SIGNING_KEY: ${{ secrets.VECTOR_KEYSTORE_BASE64 != '' }}
     steps:
       - name: Check out source and submodules
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: recursive
           fetch-depth: 0
 
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
-          cache: gradle
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
-      - name: Install Android build tools
-        run: |
-          sdkmanager "platform-tools" "platforms;android-37" "build-tools;37.0.0" \
-            "ndk;29.0.14206865" "cmake;3.29.8"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Create CI signing key
         if: env.HAS_PERSISTENT_SIGNING_KEY != 'true'
@@ -72,7 +69,7 @@ jobs:
             "androidStorePassword=$ANDROID_STORE_PASSWORD" \
             "androidKeyPassword=$ANDROID_KEY_PASSWORD" \
             "androidKeyAlias=$ANDROID_KEY_ALIAS" >> gradle.properties
-          ./gradlew :zygisk:zipAll --no-daemon --stacktrace
+          ./gradlew zipAll --no-daemon --stacktrace
 
       - name: Upload Vector module
         uses: actions/upload-artifact@v4
