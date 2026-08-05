@@ -47,6 +47,15 @@ to the account/browser session, so a separate browser produces a new URL again.
 **How to apply:** Use the in-Colab Chromium/VNC test for this state, then retry
 the official login from that same Colab runtime.
 
+The account verification page can require clicking `Send` and entering a code
+sent to the masked recovery email; loading the notification URL alone is not completion.
+
+**Why:** The live Xiaomi page presented an email-code challenge after the accepted
+password login, so retries before completing that challenge generate a new URL.
+
+**How to apply:** Complete the email-code challenge inside the same Colab Chromium
+session, then press Enter; never ask the user to paste the code into chat.
+
 The account login endpoint currently expects an uppercase MD5 password hash;
 after that succeeds, Xiaomi may return `notificationUrl` instead of tokens,
 meaning credentials are valid but account verification must be completed.

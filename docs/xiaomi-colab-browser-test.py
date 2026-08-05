@@ -399,7 +399,8 @@ def main():
                 "desktop above."
             )
             print(
-                "Complete every step until Xiaomi shows an explicit success message."
+                "Click Send, enter the code Xiaomi emails to the masked address, "
+                "then complete every step until Xiaomi shows an explicit success message."
             )
             input("After success is visible in Chromium, press Enter here: ")
             merge_browser_cookies(xiaomi, driver)
