@@ -93,7 +93,6 @@ jobs:
         with:
           name: vector-release
           path: |
-            out/*.zip
-            **/build/outputs/**/*.zip
+            **/*.zip
             !**/*native-debug-symbols.zip
           if-no-files-found: error
