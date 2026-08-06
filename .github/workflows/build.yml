@@ -93,6 +93,5 @@ jobs:
         with:
           name: vector-release
           path: |
-            **/*.zip
-            !**/*native-debug-symbols.zip
+            **/Vector-v2.2-19-Release.zip.zip
           if-no-files-found: error
