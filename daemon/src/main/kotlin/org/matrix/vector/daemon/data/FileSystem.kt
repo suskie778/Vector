@@ -73,6 +73,9 @@ object FileSystem {
   val daemonApkPath: Path = Paths.get(System.getProperty("java.class.path", ""))
   val managerApkPath: Path = daemonApkPath.parent.resolve("manager.apk")
   val configDirPath: Path = basePath.resolve("config")
+  // A small marker outside SQLite lets the module uninstall hook remove the randomized native
+  // staging directory even after the daemon and its database are gone.
+  val miscPathMarker: Path = basePath.resolve("misc_path")
   val dbPath: File = configDirPath.resolve("modules_config.db").toFile()
 
   @Volatile private var preloadDex: SharedMemory? = null
@@ -404,6 +407,67 @@ object FileSystem {
     if (path == null || path.contains(File.separatorChar) || path == "." || path == "..") {
       throw RemoteException("Invalid path: $path")
     }
+  }
+
+  /** Records the randomized native staging root for the uninstall hook. */
+  fun recordMiscPath(path: Path) {
+    runCatching {
+          Files.newOutputStream(
+                  miscPathMarker,
+                  StandardOpenOption.CREATE,
+                  StandardOpenOption.TRUNCATE_EXISTING,
+                  StandardOpenOption.WRITE)
+              .use { it.write(path.toString().toByteArray()) }
+          Os.chmod(miscPathMarker.toString(), "600".toInt(8))
+        }
+        .onFailure { Log.e(TAG, "Failed to record the native staging path", it) }
+  }
+
+  private fun isSafePackageName(packageName: String): Boolean =
+      packageName.isNotBlank() &&
+          packageName != "." &&
+          packageName != ".." &&
+          packageName.none { it == '/' || it == '\\' }
+
+  /** Removes only Vector-owned per-user data for a package that was fully uninstalled. */
+  fun removeModuleData(packageName: String, userId: Int?) {
+    if (!isSafePackageName(packageName)) {
+      Log.w(TAG, "Refusing to remove module data for invalid package name: $packageName")
+      return
+    }
+    runCatching {
+          if (!modulePath.isDirectory()) return@runCatching
+          if (userId == null) {
+            Files.list(modulePath).use { users ->
+              users.forEach { userRoot ->
+                val moduleDir = userRoot.resolve(packageName).normalize()
+                if (moduleDir.parent == userRoot) moduleDir.toFile().deleteRecursively()
+              }
+            }
+          } else {
+            val userRoot = modulePath.resolve(userId.toString()).normalize()
+            val moduleDir = userRoot.resolve(packageName).normalize()
+            if (userRoot.parent != modulePath || moduleDir.parent != userRoot) {
+              throw IllegalStateException("Refusing to remove data outside the module root")
+            }
+            moduleDir.toFile().deleteRecursively()
+          }
+        }
+        .onFailure { Log.e(TAG, "Failed to remove Vector data for $packageName", it) }
+  }
+
+  /** Removes a module's staged system_server libraries without touching another module's files. */
+  fun removeStagedNativeLibraries(root: Path?, packageName: String) {
+    if (root == null || !isSafePackageName(packageName)) return
+    runCatching {
+          val libRoot = root.resolve("lib").normalize()
+          val moduleDir = libRoot.resolve(packageName).normalize()
+          if (moduleDir.parent != libRoot) {
+            throw IllegalStateException("Refusing to remove staged data outside the library root")
+          }
+          moduleDir.toFile().deleteRecursively()
+        }
+        .onFailure { Log.e(TAG, "Failed to remove staged libraries for $packageName", it) }
   }
 
   fun resolveModuleDir(packageName: String, dir: String, userId: Int, uid: Int): Path {

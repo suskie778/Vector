@@ -123,6 +123,7 @@ object ConfigCache {
           Paths.get(pathStr)
         }
     synchronized(this) { state = state.copy(miscPath = path) }
+    FileSystem.recordMiscPath(path)
 
     runCatching {
           val perms =
@@ -311,7 +312,11 @@ object ConfigCache {
       }
 
       if (packageManager?.asBinder()?.isBinderAlive == true) {
-        obsoleteModules.forEach { ModuleDatabase.removeModule(it) }
+        obsoleteModules.forEach {
+          ModuleDatabase.removeModule(it)
+          FileSystem.removeModuleData(it, null)
+          FileSystem.removeStagedNativeLibraries(state.miscPath, it)
+        }
         obsoletePaths.forEach { (pkg, path) -> ModuleDatabase.updateModuleApkPath(pkg, path, true) }
       }
 

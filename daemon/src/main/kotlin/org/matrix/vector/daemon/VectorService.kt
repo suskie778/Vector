@@ -13,12 +13,14 @@ import android.os.IBinder
 import android.telephony.TelephonyManager
 import android.util.Log
 import hidden.HiddenApiBridge
+import java.nio.file.Paths
 import io.github.libxposed.service.IXposedScopeCallback
 import kotlinx.coroutines.launch
 import org.matrix.vector.ipc.ScopeEntry
 import org.matrix.vector.ipc.IVectorDaemon
 import org.matrix.vector.ipc.IFrameworkService
 import org.matrix.vector.daemon.data.ConfigCache
+import org.matrix.vector.daemon.data.FileSystem
 import org.matrix.vector.daemon.data.ModuleDatabase
 import org.matrix.vector.daemon.data.PreferenceStore
 import org.matrix.vector.daemon.data.ProcessScope
@@ -273,7 +275,18 @@ object VectorService : IVectorDaemon.Stub() {
           // If it's gone for everyone, wipe the package from all users in the DB.
           // Otherwise, only wipe it for the user that just uninstalled it.
           val targetUser = if (isRemovedForAllUsers) null else userId
-          PreferenceStore.deleteModulePrefs(moduleName, userId, group = null)
+          // Package removal can arrive while the daemon is still alive. Clean Vector's private
+          // module data before the next cache rebuild, so a stale native library cannot be staged
+          // again and a reinstall cannot inherit state from the removed package.
+          FileSystem.removeModuleData(moduleName, targetUser)
+          if (isRemovedForAllUsers) {
+            val miscPath =
+                ConfigCache.state.miscPath
+                    ?: (PreferenceStore.getModulePrefs("lspd", 0, "config")["misc_path"] as? String)
+                        ?.let(Paths::get)
+            FileSystem.removeStagedNativeLibraries(miscPath, moduleName)
+          }
+          PreferenceStore.deleteModulePrefs(moduleName, targetUser, group = null)
           // The one preference of a module that is not stored under the module. "Never ask again"
           // writes the package into a set belonging to "lspd", so the line above — which deletes
           // what is filed under the module's own name — walks straight past it, and the package
