@@ -92,5 +92,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: vector-release
-          
+          path: |
+            out/*.zip
+            **/build/outputs/**/*.zip
+            !**/*native-debug-symbols.zip
           if-no-files-found: error
